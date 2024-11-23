@@ -1,0 +1,89 @@
+function doPost(e) {
+  try {
+    var jsonInput = JSON.parse(e.postData.contents); // Parse the JSON body
+    var encryptedQrCode = jsonInput.qr_code; // Extract QR code value (encrypted)
+
+    // Decrypt the QR code (assuming AES with a predefined key and IV)
+    var decryptedQrCode = decryptQrCode(encryptedQrCode); // Custom function to decrypt
+
+    // Logic to search for registration number in Google Sheets
+    var sheet = SpreadsheetApp.openById('1GP_J9GdAR2GmVzd2dvGEBhQCm7gEoulPqL15LV27Zyk').getSheetByName('Sheet1');
+    var range = sheet.getRange('C2:C'); // Assuming reg numbers are in column C starting from row 2
+    var values = range.getValues();
+
+    var regNoFound = false;
+    for (var i = 0; i < values.length; i++) {
+      if (values[i][0] === decryptedQrCode) {
+        // Mark attendance, assuming we mark in column D (attendance column)
+        sheet.getRange(i + 2, 4).setValue('Present'); // Mark as present in column D
+        regNoFound = true;
+        break;
+      }
+    }
+
+    // Return success or error message based on finding the registration number
+    if (regNoFound) {
+      return ContentService.createTextOutput(
+        JSON.stringify({ status: 'success', message: 'Attendance marked successfully.' })
+      ).setMimeType(ContentService.MimeType.JSON);
+    } else {
+      return ContentService.createTextOutput(
+        JSON.stringify({status: 'error', message: 'Registration number not found.'})
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+  } catch (error) {
+    return ContentService.createTextOutput(
+      JSON.stringify({status: 'error', message: 'An error occurred: ' + error.message})
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Decrypts an encrypted QR code.
+ * Replace this with your actual decryption logic.
+ * Example uses AES with CryptoJS.
+ */
+function decryptQrCode(encryptedQrCode) {
+  // Ensure that CryptoJS is available globally
+  if (typeof CryptoJS === 'undefined') {
+    throw new Error("CryptoJS is not loaded properly");
+  }
+
+  // Define your AES key and IV (Initialization Vector)
+  var key = 'your-32-byte-secret-key'; // Replace with your actual key
+  var iv = 'your-16-byte-iv'; // Replace with your actual IV
+
+  // Use CryptoJS for decryption
+  var decrypted = CryptoJS.AES.decrypt(
+    encryptedQrCode,  // The encrypted QR code string
+    CryptoJS.enc.Utf8.parse(key),  // The AES key
+    {
+      iv: CryptoJS.enc.Utf8.parse(iv), // The IV (Initialization Vector)
+      mode: CryptoJS.mode.CBC,         // CBC mode (Change it if needed)
+      padding: CryptoJS.pad.Pkcs7     // PKCS7 padding
+    }
+  );
+
+  // Convert the decrypted value to a string
+  return decrypted.toString(CryptoJS.enc.Utf8);  // Decrypted result
+}
+
+
+/**
+ * Test Function for Debugging
+ */
+function testDoPost() {
+  var testQrCode = "IEYhz/+agJrmyvJstsvSKwMLBMrVx0hilsRSnWfu48E="; // Replace with your test QR code value
+  var decryptedQrCode = decryptQrCode(testQrCode);
+
+  Logger.log("Decrypted QR Code: " + decryptedQrCode);
+
+  var testPayload = {
+    postData: {
+      contents: JSON.stringify({ qr_code: testQrCode })
+    }
+  };
+
+  var response = doPost(testPayload);
+  Logger.log("Response: " + response.getContent());
+}
